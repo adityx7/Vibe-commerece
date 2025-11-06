@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vibe Commerce - Mock Cart</title>
+    <!-- Using Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Using Inter as the default font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Simple spinner for loading states */
+        .spinner {
+            border: 2px solid rgba(0, 0, 0, 0.1);
+            border-left-color: #4f46e5; /* Indigo */
+            border-radius: 50%;
+            width: 16px;
+            height: 16px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Error Toast Styling */
+        #error-toast {
+            position: fixed;
+            bottom: -100px; /* Start hidden */
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #ef4444; /* Red */
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            transition: bottom 0.5s ease-in-out;
+            z-index: 100;
+            font-weight: 500;
+        }
+        #error-toast.show {
+            bottom: 20px; /* Slide in */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-900">
+
+    <!-- Main Application Container -->
+    <div class="container mx-auto max-w-6xl p-4">
+        <header class="mb-8 text-center">
+            <h1 class="text-4xl font-bold text-indigo-600">Vibe Commerce</h1>
+            <p class="text-lg text-gray-600">Your Mock E-Com Cart</p>
+        </header>
+
+        <!-- Main Content Area: Products + Cart -->
+        <div class="flex flex-col md:flex-row gap-8">
+
+            <!-- Products Section (Left) -->
+            <div class="w-full md:w-2/3">
+                <h2 class="text-2xl font-semibold mb-4">Products</h2>
+                <!-- Product grid will be populated by JS -->
+                <div id="products-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Loading placeholder -->
+                    <div class="p-4 bg-white rounded-lg shadow-md col-span-full text-center text-gray-500">
+                        <div class="spinner mx-auto mb-2"></div>
+                        Loading Products...
+                    </div>
+                </div>
+            </div>
+
+            <!-- Cart Section (Right) -->
+            <aside class="w-full md:w-1/3">
+                <div class="bg-white rounded-lg shadow-md p-6 sticky top-8">
+                    <h2 class="text-2xl font-semibold mb-4">Your Cart</h2>
+                    
+                    <!-- Cart items will be populated by JS -->
+                    <div id="cart-items" class="divide-y divide-gray-200">
+                        <!-- Cart Item Structure (Template)
+                        <div class="flex justify-between items-center py-3">
+                            <div>
+                                <h4 class="font-semibold">Product Name</h4>
+                                <p class="text-sm text-gray-500">$9.99 x 1</p>
+                            </div>
+                            <button class="text-red-500 hover:text-red-700 text-sm font-medium">Remove</button>
+                        </div>
+                        -->
+                        <p id="cart-loading" class="text-gray-500">Loading cart...</p>
+                    </div>
+
+                    <!-- Cart Total -->
+                    <div class="border-t border-gray-200 pt-4 mt-4">
+                        <div class="flex justify-between items-center mb-4">
+                            <span class="text-lg font-semibold">Total:</span>
+                            <span id="cart-total" class="text-xl font-bold text-indigo-600">$0.00</span>
+                        </div>
+                        <button id="checkout-btn" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-indigo-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed">
+                            Proceed to Checkout
+                        </button>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+
+    <!-- Error Toast Notification -->
+    <div id="error-toast">
+        <!-- Message will be set by JS -->
+    </div>
+
+    <!-- Checkout Modal (Hidden by default) -->
+    <div id="checkout-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl p-6 w-full max-w-md relative">
+            <!-- Close Button -->
+            <button class="close-modal absolute top-4 right-4 text-gray-400 hover:text-gray-600" aria-label="Close modal">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            
+            <h3 class="text-2xl font-semibold mb-6">Checkout</h3>
+            <form id="checkout-form">
+                <div class="mb-4">
+                    <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                    <input type="text" id="name" name="name" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                </div>
+                <div class="mb-6">
+                    <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
+                    <input type="email" id="email" name="email" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" required>
+                </div>
+                <button type="submit" id="submit-checkout-btn" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg font-semibold hover:bg-indigo-700 transition-colors duration-200 flex items-center justify-center disabled:opacity-50">
+                    <span class="btn-text">Place Mock Order</span>
+                    <div class="spinner hidden ml-2"></div>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Receipt Modal (Hidden by default) -->
+    <div id="receipt-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-lg shadow-xl p-8 w-full max-w-lg relative">
+            <!-- Close Button -->
+            <button class="close-modal absolute top-4 right-4 text-gray-400 hover:text-gray-600" aria-label="Close modal">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            
+            <div class="text-center mb-6">
+                <svg class="w-16 h-16 text-green-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                <h3 class="text-2xl font-semibold mt-4">Order Successful!</h3>
+                <p class="text-gray-600">This is a mock receipt. No payment was processed.</p>
+            </div>
+            
+            <!-- Receipt details will be populated by JS -->
+            <div id="receipt-content" class="text-sm text-gray-700 bg-gray-50 p-4 rounded-lg">
+                <!-- Receipt content template
+                <p><strong>Order ID:</strong> 12345</p>
+                <p><strong>Date:</strong> Thu Nov 06 2025</p>
+                <p><strong>Billed To:</strong> John Doe (john@example.com)</p>
+                <p class="font-bold text-lg mt-4">Total: $29.98</p>
+                -->
+            </div>
+             <button class="close-modal w-full mt-6 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg font-semibold hover:bg-gray-300 transition-colors duration-200">
+                Close
+            </button>
+        </div>
+    </div>
+
+
+    <script>
+        /**
+         * ----------------------------------------------------------------
+         * PART 1: MOCK BACKEND / API SERVICE
+         * (Simulates Node.js/Express server + MongoDB/SQLite)
+         * ----------------------------------------------------------------
+         */
+        const mockApi = (() => {
+            // This is our in-memory "database"
+            const db = {
+                products: [], // Will be populated by the Fake Store API
+                cart: [] // Stores objects: { cartItemId, productId, name, price, quantity }
+            };
+
+            // Simulates network latency
+            const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+            // --- LocalStorage Persistence ---
+            function saveCartToStorage() {
+                try {
+                    localStorage.setItem('vibeCart', JSON.stringify(db.cart));
+                } catch (e) {
+                    console.error("Failed to save cart to localStorage", e);
+                }
+            }
+
+            function loadCartFromStorage() {
+                try {
+                    const savedCart = localStorage.getItem('vibeCart');
+                    if (savedCart) {
+                        db.cart = JSON.parse(savedCart);
+                    }
+                } catch (e) {
+                    console.error("Failed to load cart from localStorage", e);
+                    db.cart = []; // Reset cart on parsing error
+                }
+            }
+
+            // --- API Endpoints ---
+
+            // GET /api/products
+            async function getProducts() {
+                // Use cached products if available
+                if (db.products.length > 0) {
+                    return db.products;
+                }
+                
+                // Fetch from Fake Store API
+                try {
+                    const response = await fetch('https://fakestoreapi.com/products?limit=6'); // Get 6 products
+                    if (!response.ok) {
+                        throw new Error(`API request failed with status ${response.status}`);
+                    }
+                    const data = await response.json();
+                    
+                    // Store in our "db" for caching and for addToCart
+                    db.products = data; 
+                    return data;
+                } catch (error) {
+                    console.error("Failed to fetch products from Fake Store API:", error);
+                    throw error; // Re-throw to be caught by the frontend
+                }
+            }
+
+            // GET /api/cart
+            async function getCart() {
+                await delay(100);
+                const total = db.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                return {
+                    items: db.cart,
+                    total: total
+                };
+            }
+
+            // POST /api/cart
+            async function addToCart(data) {
+                const { productId, quantity } = data;
+                await delay(200);
+                
+                // Find product in our "db" (which was populated by getProducts)
+                const product = db.products.find(p => p.id == productId); // Use == for potential type coercion
+                if (!product) return { success: false, message: 'Product not found' };
+
+                const existingItem = db.cart.find(item => item.productId == productId);
+
+                if (existingItem) {
+                    existingItem.quantity += quantity;
+                } else {
+                    const cartItemId = `cart-${Date.now()}`;
+                    db.cart.push({
+                        cartItemId,
+                        productId: product.id,
+                        name: product.title, // Use 'title' from Fake Store API
+                        price: product.price,
+                        quantity
+                    });
+                }
+                
+                saveCartToStorage(); // Persist cart
+                return { success: true, cart: await getCart() };
+            }
+
+            // DELETE /api/cart/:id
+            async function removeFromCart(cartItemId) {
+                await delay(200);
+                db.cart = db.cart.filter(item => item.cartItemId !== cartItemId);
+                saveCartToStorage(); // Persist cart
+                return { success: true };
+            }
+
+            // POST /api/checkout
+            async function checkout(data) {
+                const { cartItems, userDetails } = data;
+                await delay(1000); // Simulate payment processing
+
+                const total = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                
+                // Create mock receipt
+                const receipt = {
+                    id: `receipt-${Date.now()}`,
+                    timestamp: new Date(),
+                    user: userDetails,
+                    items: cartItems,
+                    total: total
+                };
+
+                // Clear the cart after successful checkout
+                db.cart = [];
+                saveCartToStorage(); // Persist empty cart
+
+                return { success: true, receipt };
+            }
+
+            // Public API
+            return {
+                loadCartFromStorage, // Expose for init
+                getProducts,
+                getCart,
+                addToCart,
+                removeFromCart,
+                checkout
+            };
+        })();
+
+
+        /**
+         * ----------------------------------------------------------------
+         * PART 2: FRONTEND APPLICATION LOGIC
+         * (Simulates React Components and State Management)
+         * ----------------------------------------------------------------
+         */
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // --- DOM Element Selectors ---
+            const productsGrid = document.getElementById('products-grid');
+            const cartItemsContainer = document.getElementById('cart-items');
+            const cartLoading = document.getElementById('cart-loading');
+            const cartTotalEl = document.getElementById('cart-total');
+            const checkoutBtn = document.getElementById('checkout-btn');
+            
+            // Error Toast
+            const errorToast = document.getElementById('error-toast');
+            let errorTimeout = null;
+
+            // Modals
+            const checkoutModal = document.getElementById('checkout-modal');
+            const receiptModal = document.getElementById('receipt-modal');
+            const closeModalBtns = document.querySelectorAll('.close-modal');
+
+            // Checkout Form
+            const checkoutForm = document.getElementById('checkout-form');
+            const submitCheckoutBtn = document.getElementById('submit-checkout-btn');
+            const submitCheckoutBtnText = submitCheckoutBtn.querySelector('.btn-text');
+            const submitCheckoutSpinner = submitCheckoutBtn.querySelector('.spinner');
+
+            // Receipt
+            const receiptContent = document.getElementById('receipt-content');
+
+            // --- Render Functions ---
+
+            /**
+             * Renders the list of products
+             * @param {Array} products - Array of product objects from the API
+             */
+            function renderProducts(products) {
+                if (!productsGrid) return;
+                productsGrid.innerHTML = ''; // Clear loading state
+
+                products.forEach(product => {
+                    const card = document.createElement('div');
+                    card.className = 'bg-white rounded-lg shadow-md overflow-hidden transition-transform duration-200 hover:scale-[1.02] flex flex-col';
+                    card.innerHTML = `
+                        <div class="h-48 w-full p-4">
+                            <img src="${product.image}" alt="${product.title}" class="w-full h-full object-contain" onerror="this.src='https://placehold.co/400x300/cccccc/333333?text=Image+Not+Found';">
+                        </div>
+                        <div class="p-4 flex-grow flex flex-col">
+                            <h3 class="text-lg font-semibold leading-snug truncate" title="${product.title}">${product.title}</h3>
+                            <p class="text-gray-700 font-bold mt-1 mb-4">$${product.price.toFixed(2)}</p>
+                            <button 
+                                data-product-id="${product.id}"
+                                class="add-to-cart-btn w-full mt-auto bg-indigo-100 text-indigo-700 py-2 px-4 rounded-lg font-semibold hover:bg-indigo-200 transition-colors duration-200 disabled:opacity-50">
+                                <span class="btn-text">Add to Cart</span>
+                                <div class="spinner hidden mx-auto"></div>
+                            </button>
+                        </div>
+                    `;
+                    productsGrid.appendChild(card);
+                });
+            }
+
+            /**
+             * Renders the items in the cart
+             * @param {Object} cartData - { items: Array, total: Number }
+             */
+            function renderCart(cartData) {
+                if (!cartItemsContainer) return;
+
+                cartLoading.classList.add('hidden'); // Hide loading text
+                cartItemsContainer.innerHTML = ''; // Clear existing items
+                
+                const { items, total } = cartData;
+
+                if (items.length === 0) {
+                    cartItemsContainer.innerHTML = '<p class="text-gray-500 text-center py-4">Your cart is empty.</p>';
+                } else {
+                    items.forEach(item => {
+                        const itemEl = document.createElement('div');
+                        itemEl.className = 'flex justify-between items-center py-3';
+                        itemEl.innerHTML = `
+                            <div>
+                                <h4 class="font-semibold">${item.name}</h4>
+                                <p class="text-sm text-gray-500">$${item.price.toFixed(2)} x ${item.quantity}</p>
+                            </div>
+                            <button 
+                                data-cart-item-id="${item.cartItemId}"
+                                class="remove-from-cart-btn text-red-500 hover:text-red-700 text-sm font-medium p-1 disabled:opacity-50"
+                                aria-label="Remove ${item.name}">
+                                <span class="btn-text">&times; Remove</span>
+                                <div class="spinner hidden"></div>
+                            </button>
+                        `;
+                        cartItemsContainer.appendChild(itemEl);
+                    });
+                }
+
+                // Update total
+                cartTotalEl.textContent = `$${total.toFixed(2)}`;
+
+                // Enable/disable checkout button
+                if (items.length === 0) {
+                    checkoutBtn.disabled = true;
+                } else {
+                    checkoutBtn.disabled = false;
+                }
+            }
+
+            // --- Event Handlers ---
+
+            async function handleAddToCart(e) {
+                const button = e.target.closest('.add-to-cart-btn');
+                if (!button) return;
+
+                const productId = button.dataset.productId; // This will be a string
+                const btnText = button.querySelector('.btn-text');
+                const spinner = button.querySelector('.spinner');
+
+                // Show loading state
+                button.disabled = true;
+                btnText.classList.add('hidden');
+                spinner.classList.remove('hidden');
+
+                try {
+                    // Pass productId as-is (mockApi.addToCart handles coercion)
+                    await mockApi.addToCart({ productId: productId, quantity: 1 });
+                    await fetchAndRenderCart(); // Update cart display
+                } catch (error) {
+                    console.error('Failed to add to cart:', error);
+                    showError("Failed to add item to cart.");
+                } finally {
+                    // Hide loading state
+                    button.disabled = false;
+                    btnText.classList.remove('hidden');
+                    spinner.classList.add('hidden');
+                }
+            }
+
+            async function handleRemoveFromCart(e) {
+                const button = e.target.closest('.remove-from-cart-btn');
+                if (!button) return;
+
+                const cartItemId = button.dataset.cartItemId;
+                const btnText = button.querySelector('.btn-text');
+                const spinner = button.querySelector('.spinner');
+                
+                // Show loading state
+                button.disabled = true;
+                btnText.classList.add('hidden');
+                spinner.classList.remove('hidden');
+
+                try {
+                    await mockApi.removeFromCart(cartItemId);
+                    await fetchAndRenderCart(); // Update cart display
+                } catch (error) {
+                    console.error('Failed to remove from cart:', error);
+                    showError("Failed to remove item from cart.");
+                } 
+                // No finally block, as the button will be removed from the DOM
+            }
+
+            async function handleCheckoutSubmit(e) {
+                e.preventDefault();
+                const name = e.target.name.value;
+                const email = e.target.email.value;
+
+                if (!name || !email) return;
+
+                // Show loading state
+                submitCheckoutBtn.disabled = true;
+                submitCheckoutBtnText.classList.add('hidden');
+                submitCheckoutSpinner.classList.remove('hidden');
+
+                try {
+                    // Get current cart items to pass to checkout
+                    const currentCart = await mockApi.getCart();
+                    
+                    const { success, receipt } = await mockApi.checkout({
+                        cartItems: currentCart.items,
+                        userDetails: { name, email }
+                    });
+
+                    if (success) {
+                        // Render receipt
+                        receiptContent.innerHTML = `
+                            <p class="mb-2"><strong>Order ID:</strong> ${receipt.id}</p>
+                            <p class="mb-2"><strong>Date:</strong> ${receipt.timestamp.toLocaleDateString()} ${receipt.timestamp.toLocaleTimeString()}</p>
+                            <p class="mb-4"><strong>Billed To:</strong> ${receipt.user.name} (${receipt.user.email})</p>
+                            <h4 class="font-semibold mb-2">Items:</h4>
+                            <ul class="list-disc list-inside mb-4">
+                                ${receipt.items.map(item => `<li>${item.name} (x${item.quantity}) - $${(item.price * item.quantity).toFixed(2)}</li>`).join('')}
+                            </ul>
+                            <p class="font-bold text-gray-900 text-lg text-right mt-4 border-t pt-4">Total: $${receipt.total.toFixed(2)}</p>
+                        `;
+                        
+                        // Close checkout modal, open receipt modal
+                        hideModal(checkoutModal);
+                        showModal(receiptModal);
+
+                        // Reset form
+                        checkoutForm.reset();
+                        
+                        // Update cart (it should be empty now)
+                        await fetchAndRenderCart();
+                    }
+
+                } catch (error) {
+                    console.error('Checkout failed:', error);
+                    showError("Checkout failed. Please try again.");
+                } finally {
+                    // Hide loading state
+                    submitCheckoutBtn.disabled = false;
+                    submitCheckoutBtnText.classList.remove('hidden');
+                    submitCheckoutSpinner.classList.add('hidden');
+                }
+            }
+
+            // --- Modal Helpers ---
+            function showModal(modal) {
+                modal.classList.remove('hidden');
+            }
+
+            function hideModal(modal) {
+                modal.classList.add('hidden');
+            }
+
+            // --- Error Handling UI ---
+            /**
+             * Displays a toast notification with an error message
+             * @param {string} message - The error message to display
+             */
+            function showError(message) {
+                if (errorTimeout) {
+                    clearTimeout(errorTimeout); // Clear previous timeout
+                }
+                errorToast.textContent = message;
+                errorToast.classList.add('show');
+                
+                // Hide after 3 seconds
+                errorTimeout = setTimeout(() => {
+                    errorToast.classList.remove('show');
+                    errorTimeout = null;
+                }, 3000);
+            }
+
+            // --- Data Fetching and Initialization ---
+
+            /** Fetches products from API and renders them */
+            async function fetchAndRenderProducts() {
+                try {
+                    const products = await mockApi.getProducts();
+                    renderProducts(products);
+                } catch (error) {
+                    console.error('Failed to fetch products:', error);
+                    showError("Could not load products."); // Show user-facing error
+                    if (productsGrid) {
+                        productsGrid.innerHTML = '<p class="text-red-500 col-span-full text-center">Could not load products. Please try refreshing.</p>';
+                    }
+                }
+            }
+
+            /** Fetches cart from API and renders it */
+            async function fetchAndRenderCart() {
+                try {
+                    const cartData = await mockApi.getCart();
+                    renderCart(cartData);
+                } catch (error) { // <-- This was the line with the error
+                    console.error('Failed to fetch cart:', error);
+                    showError("Could not load cart."); // Show user-facing error
+                    if (cartItemsContainer) {
+                        cartLoading.classList.add('hidden');
+                        cartItemsContainer.innerHTML = '<p class="text-red-500 text-center">Could not load cart.</p>';
+                    }
+                }
+            }
+
+            /** Initialize the application */
+            function init() {
+                // Load persistent cart from localStorage first
+                mockApi.loadCartFromStorage();
+
+                // Fetch initial data
+                fetchAndRenderProducts();
+                fetchAndRenderCart();
+
+                // Attach event listeners
+                productsGrid.addEventListener('click', handleAddToCart);
+                cartItemsContainer.addEventListener('click', handleRemoveFromCart);
+                checkoutBtn.addEventListener('click', () => showModal(checkoutModal));
+                checkoutForm.addEventListener('submit', handleCheckoutSubmit);
+                
+                closeModalBtns.forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        hideModal(checkoutModal);
+                        hideModal(receiptModal);
+                    });
+                });
+            }
+
+            // Run the app
+            init();
+        });
+    </script>
+</body>
+</html>
