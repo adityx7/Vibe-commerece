@@ -1,90 +1,425 @@
-# Vibe-commerece
-Vibe Commerce - Mock E-Com Cart Assignment
+# Analytics Ingestion & Reporting System
 
-This project is a solution for the Full-Stack Coding Assignment, demonstrating a basic e-commerce shopping cart flow.
+A high-performance analytics system with fast event ingestion, background processing, and comprehensive reporting capabilities. Built with Node.js, Express, Bull (Redis queue), and PostgreSQL.
 
-It is built as a single, self-contained index.html file that simulates a full-stack environment (React frontend, Node/Express backend, and DB) using vanilla JavaScript, Tailwind CSS, and the Fake Store API.
+## 🏗️ Architecture
 
-Overview
+- **API Service**: Express server handling event ingestion and statistics reporting
+- **Worker Service**: Background job processor for database persistence
+- **Redis**: Message queue for asynchronous event processing
+- **PostgreSQL**: Persistent storage with optimized indexes
 
-The application allows users to view a list of products, add or remove items from their cart, and complete a mock checkout process. The cart state is persisted in the browser's localStorage to simulate a user session.
+## 🚀 Quick Start
 
-Features
+### Prerequisites
 
-Product Listing: Fetches and displays products from the live https://fakestoreapi.com.
+- Docker and Docker Compose installed
+- Ports 4000 (API), 5432 (PostgreSQL), and 6379 (Redis) available
 
-Add to Cart: Users can add products to their shopping cart from the product list.
+### Start the System
 
-Cart Management: A sidebar displays all items in the cart, quantities, and the running total.
+```bash
+# Clone the repository
+git clone <repository-url>
+cd <repository-name>
 
-Remove from Cart: Users can remove items individually from the cart.
+# Start all services
+docker-compose up --build
+```
 
-Persistent Cart: The cart is saved to localStorage, so items remain even after refreshing or closing the browser.
+The system will:
+1. Start Redis and PostgreSQL containers
+2. Initialize the database schema from `db/init.sql`
+3. Launch the API service on port 4000
+4. Start the background worker for event processing
 
-Mock Checkout: A checkout form collects user details (name, email).
+### Verify Services
 
-Mock Receipt: On checkout, a success modal appears with a mock receipt.
+```bash
+# Check API health
+curl http://localhost:4000/health
+```
 
-Error Handling: A non-blocking toast notification appears if API calls (e.g., fetching products) fail.
+Expected response:
+```json
+{
+  "status": "healthy",
+  "service": "analytics-api"
+}
+```
 
-Responsive Design: The layout adapts for both mobile and desktop screens.
+## 📡 API Endpoints
 
-Loading States: Spinners provide visual feedback when adding/removing items or checking out.
+### 1. POST /event - Enqueue Analytics Event
 
-Tech Stack (Simulated)
+Accepts an analytics event and enqueues it for background processing. Returns immediately (202 Accepted).
 
-This project simulates the architecture requested in the assignment:
+**Request:**
+```bash
+curl -X POST http://localhost:4000/event \
+  -H "Content-Type: application/json" \
+  -d '{
+    "site_id": "website-001",
+    "event_type": "page_view",
+    "path": "/home",
+    "user_id": "user-123",
+    "timestamp": "2025-11-14T10:30:00Z"
+  }'
+```
 
-Frontend (Simulated React): Built with Vanilla JavaScript and Tailwind CSS. The JS code is structured to mimic components, state management, and event handling as one would in React.
+**Response (202 Accepted):**
+```json
+{
+  "message": "Event accepted for processing",
+  "jobId": "website-001-1731582600000-abc123xyz"
+}
+```
 
-Backend (Simulated Node/Express): A mockApi object within the <script> tag acts as the backend server. It contains async functions (getProducts, addToCart, etc.) that simulate API calls, complete with network delays.
+**Validation Rules:**
+- `site_id` (required): Non-empty string
+- `event_type` (required): Non-empty string (e.g., "page_view", "click")
+- `path` (required): Non-empty string (URL path)
+- `user_id` (optional): String identifier for user tracking
+- `timestamp` (required): ISO 8601 date string (e.g., "2025-11-14T10:30:00Z")
 
-Database (Simulated MongoDB/SQLite):
+**Error Response (400 Bad Request):**
+```json
+{
+  "error": "Invalid payload",
+  "details": [
+    "timestamp must be a valid ISO 8601 date string"
+  ]
+}
+```
 
-Product data is fetched live from the Fake Store API.
+### 2. GET /stats - Retrieve Analytics Statistics
 
-Cart data is "persisted" using the browser's localStorage, fulfilling the bonus requirement for DB persistence.
+Fetches aggregated analytics for a specific site and date.
 
-How to Run
+**Request:**
+```bash
+# Get stats for today
+curl "http://localhost:4000/stats?site_id=website-001"
 
-There is no backend or frontend server to run.
+# Get stats for specific date
+curl "http://localhost:4000/stats?site_id=website-001&date=2025-11-14"
+```
 
-Save the index.html file.
+**Response (200 OK):**
+```json
+{
+  "site_id": "website-001",
+  "date": "2025-11-14",
+  "total_views": 150,
+  "unique_users": 45,
+  "top_paths": [
+    { "path": "/home", "views": 75 },
+    { "path": "/products", "views": 40 },
+    { "path": "/about", "views": 20 },
+    { "path": "/contact", "views": 15 }
+  ]
+}
+```
 
-Open the index.html file in any modern web browser (e.g., Chrome, Firefox, Safari).
+**Query Parameters:**
+- `site_id` (required): Site identifier
+- `date` (optional): Date in YYYY-MM-DD format (defaults to today)
 
-The application will load and be fully functional.
+**Error Response (400 Bad Request):**
+```json
+{
+  "error": "site_id query parameter is required"
+}
+```
 
-Simulated API Endpoints
+## 🧪 Example Usage & Testing
 
-The mockApi JavaScript object simulates the following REST API endpoints:
+### Scenario 1: Single Event Ingestion
 
-GET /api/products:
+```bash
+# Ingest a page view event
+curl -X POST http://localhost:4000/event \
+  -H "Content-Type: application/json" \
+  -d '{
+    "site_id": "demo-site",
+    "event_type": "page_view",
+    "path": "/landing",
+    "user_id": "user-001",
+    "timestamp": "2025-11-14T12:00:00Z"
+  }'
+```
 
-Implementation: mockApi.getProducts()
+### Scenario 2: Multiple Events with Different Users and Paths
 
-Action: Fetches 6 products from https://fakestoreapi.com/products and caches them.
+```bash
+# Event 1: User 001 views home page
+curl -X POST http://localhost:4000/event \
+  -H "Content-Type: application/json" \
+  -d '{
+    "site_id": "demo-site",
+    "event_type": "page_view",
+    "path": "/home",
+    "user_id": "user-001",
+    "timestamp": "2025-11-14T12:00:00Z"
+  }'
 
-POST /api/cart:
+# Event 2: User 002 views products page
+curl -X POST http://localhost:4000/event \
+  -H "Content-Type: application/json" \
+  -d '{
+    "site_id": "demo-site",
+    "event_type": "page_view",
+    "path": "/products",
+    "user_id": "user-002",
+    "timestamp": "2025-11-14T12:05:00Z"
+  }'
 
-Implementation: mockApi.addToCart({ productId, quantity })
+# Event 3: User 001 views products page
+curl -X POST http://localhost:4000/event \
+  -H "Content-Type: application/json" \
+  -d '{
+    "site_id": "demo-site",
+    "event_type": "page_view",
+    "path": "/products",
+    "user_id": "user-001",
+    "timestamp": "2025-11-14T12:10:00Z"
+  }'
 
-Action: Adds an item to the cart in localStorage and returns the updated cart.
+# Event 4: Anonymous user views home page
+curl -X POST http://localhost:4000/event \
+  -H "Content-Type: application/json" \
+  -d '{
+    "site_id": "demo-site",
+    "event_type": "page_view",
+    "path": "/home",
+    "timestamp": "2025-11-14T12:15:00Z"
+  }'
 
-DELETE /api/cart/:id:
+# Event 5: User 003 views about page
+curl -X POST http://localhost:4000/event \
+  -H "Content-Type: application/json" \
+  -d '{
+    "site_id": "demo-site",
+    "event_type": "page_view",
+    "path": "/about",
+    "user_id": "user-003",
+    "timestamp": "2025-11-14T12:20:00Z"
+  }'
+```
 
-Implementation: mockApi.removeFromCart(cartItemId)
+### Scenario 3: Fetch Statistics
 
-Action: Removes an item from the cart in localStorage.
+```bash
+# Wait a few seconds for background processing, then fetch stats
+sleep 5
 
-GET /api/cart:
+curl "http://localhost:4000/stats?site_id=demo-site&date=2025-11-14"
+```
 
-Implementation: mockApi.getCart()
+Expected output:
+```json
+{
+  "site_id": "demo-site",
+  "date": "2025-11-14",
+  "total_views": 5,
+  "unique_users": 3,
+  "top_paths": [
+    { "path": "/home", "views": 2 },
+    { "path": "/products", "views": 2 },
+    { "path": "/about", "views": 1 }
+  ]
+}
+```
 
-Action: Retrieves the current cart and total from localStorage.
+## ✅ Verification Checklist
 
-POST /api/checkout:
+### 1. System Startup
+- [ ] All containers start successfully: `docker-compose ps`
+- [ ] API service is healthy: `curl http://localhost:4000/health`
+- [ ] No errors in logs: `docker-compose logs api worker`
 
-Implementation: mockApi.checkout({ cartItems, userDetails })
+### 2. Event Ingestion
+- [ ] POST /event returns 202 Accepted status
+- [ ] Response includes a jobId
+- [ ] Invalid payloads return 400 with error details
 
-Action: Simulates order processing, clears the cart, and returns a mock receipt.
+### 3. Background Processing
+- [ ] Worker logs show "Processing event" messages
+- [ ] Worker logs show "Event inserted successfully" messages
+- [ ] No repeated failures in worker logs
+
+### 4. Database Persistence
+```bash
+# Connect to PostgreSQL and verify data
+docker exec -it analytics-postgres psql -U analytics_user -d analytics -c "SELECT COUNT(*) FROM events;"
+```
+- [ ] Events count matches number of POSTed events
+
+### 5. Reporting Endpoint
+- [ ] GET /stats returns 200 OK with correct aggregations
+- [ ] total_views matches the count of page_view events
+- [ ] unique_users counts distinct user_id values (excludes null)
+- [ ] top_paths are ordered by view count (descending)
+- [ ] Missing site_id returns 400 error
+
+### 6. Performance
+- [ ] POST /event responds in < 100ms (fast enqueue)
+- [ ] Multiple concurrent requests handled without errors
+- [ ] Worker processes jobs within 1-2 seconds
+
+## 🔧 Configuration
+
+All configuration is managed through environment variables. See `.env.example` for available options:
+
+```bash
+# Copy example environment file
+cp .env.example .env
+
+# Edit as needed
+nano .env
+```
+
+### Key Configuration Options
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_PORT` | 4000 | API service port |
+| `POSTGRES_DB` | analytics | Database name |
+| `POSTGRES_USER` | analytics_user | Database user |
+| `POSTGRES_PASSWORD` | analytics_pass | Database password |
+| `QUEUE_NAME` | analytics-events | Redis queue name |
+| `WORKER_CONCURRENCY` | 5 | Number of concurrent jobs |
+
+## 📊 Database Schema
+
+### Events Table
+
+```sql
+CREATE TABLE events (
+    id BIGSERIAL PRIMARY KEY,
+    site_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    path TEXT NOT NULL,
+    user_id TEXT,
+    timestamp TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### Indexes
+
+- `idx_events_site_date`: Optimizes date-range queries
+- `idx_events_site_path`: Optimizes path aggregation
+- `idx_events_site_user`: Optimizes unique user counting
+- `idx_events_site_timestamp`: General site/time queries
+
+## 🐳 Docker Services
+
+### API Service
+- **Port**: 4000
+- **Dependencies**: Redis, PostgreSQL
+- **Restart Policy**: unless-stopped
+
+### Worker Service
+- **Dependencies**: Redis, PostgreSQL
+- **Concurrency**: 5 jobs (configurable)
+- **Restart Policy**: unless-stopped
+
+### PostgreSQL
+- **Port**: 5432
+- **Volume**: Persistent storage
+- **Health Check**: Included
+
+### Redis
+- **Port**: 6379
+- **Health Check**: Included
+
+## 🛠️ Development
+
+### Local Development (without Docker)
+
+```bash
+# Start Redis and PostgreSQL locally
+# Update .env with local connection details
+
+# API service
+cd api
+npm install
+npm run dev
+
+# Worker service (in another terminal)
+cd worker
+npm install
+npm run dev
+```
+
+### View Logs
+
+```bash
+# All services
+docker-compose logs -f
+
+# Specific service
+docker-compose logs -f api
+docker-compose logs -f worker
+```
+
+### Stop Services
+
+```bash
+# Stop all services
+docker-compose down
+
+# Stop and remove volumes (deletes data)
+docker-compose down -v
+```
+
+## 🔍 Troubleshooting
+
+### Issue: Events not appearing in stats
+
+**Solution:**
+1. Check worker logs: `docker-compose logs worker`
+2. Verify worker is processing jobs successfully
+3. Ensure timestamp date matches the query date
+4. Check database: `docker exec -it analytics-postgres psql -U analytics_user -d analytics -c "SELECT * FROM events LIMIT 5;"`
+
+### Issue: API not responding
+
+**Solution:**
+1. Check API logs: `docker-compose logs api`
+2. Verify port 4000 is not in use: `lsof -i :4000`
+3. Restart API service: `docker-compose restart api`
+
+### Issue: Worker failing to connect to database
+
+**Solution:**
+1. Check PostgreSQL health: `docker-compose ps postgres`
+2. Verify database credentials in docker-compose.yml
+3. Restart services: `docker-compose restart worker postgres`
+
+## 📝 Performance Considerations
+
+- **Ingestion**: Sub-100ms response time (enqueue-only, no DB writes)
+- **Background Processing**: Configurable concurrency (default: 5 jobs)
+- **Reporting Queries**: Optimized with indexes on site_id, date, path, and user_id
+- **Queue Management**: Auto-cleanup of completed/failed jobs to prevent memory growth
+
+## 🔒 Security Notes
+
+- Uses parameterized queries to prevent SQL injection
+- Environment variables for sensitive configuration
+- Non-root Docker user for services
+- Health checks for service monitoring
+
+## 📄 License
+
+MIT
+
+## 🤝 Contributing
+
+Contributions welcome! Please ensure all tests pass and follow the existing code style.
+
+---
+
+**Built with ❤️ using Node.js, Express, Bull, Redis, and PostgreSQL**
